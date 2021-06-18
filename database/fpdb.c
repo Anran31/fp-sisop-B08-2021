@@ -42,6 +42,7 @@ int checkUserExist(char *user);
 int tryUse(char *lower,char *real);
 int checkUserPermission(char *realDBName);
 void makeLog(char *fullCommand);
+int tryCreateTable(char *lower, char *real);
 void *connection_handler(void *socket_desc);
 
 int main() {
@@ -331,6 +332,13 @@ char* mainQuery(char *fullCommand)
             StatVal = tryUse(lowerFullCommand,copyFullCommand);
             if(StatVal == 1) strcpy(retMessage,"Change Working Database");
             else if(StatVal == 2) strcpy(retMessage,"Database Didn't Exist");
+        }
+        else if(!strncmp(lowerFullCommand,"create table ",13))
+        {
+            StatVal = tryCreateTable(lowerFullCommand,copyFullCommand);
+            if(StatVal == 1) strcpy(retMessage,"Table Created");
+            else if(StatVal == 2) strcpy(retMessage,"Table Already Exist");
+            else if(StatVal == 3) strcpy(retMessage,"Must Use A Database First");
         }
         else if(!strncmp(lowerFullCommand,"exit",4))
         {
@@ -656,8 +664,10 @@ int checkUserPermission(char *realDBName)
 
     sprintf(userTable,"%s:%s\n",loggedUser,realDBName);
     FILE * fPtr;
+    fPtr = fopen(userPermissionTablePath, "r");
 
-    fPtr = fopen(userListTablePath, "r");
+    // FILE *f;
+    // f = fopen("/home/anran/kuliah/sisop/fp/server/userPermission.log","a");
 
     char *creds;
     size_t len = 0;
@@ -669,6 +679,7 @@ int checkUserPermission(char *realDBName)
         }
     }
 
+    // fclose(f);
     fclose(fPtr);
     return 0;
 }
@@ -688,4 +699,54 @@ void makeLog(char *fullCommand)
   command[strcspn(command,";")] = '\n';
 	fprintf(f, "%04d-%02d-%02d %02d:%02d:%02d:%s:%s",timeinfo->tm_year+1900,timeinfo->tm_mon+1,timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec,loggedUser,command);
   fclose(f);
+}
+
+int tryCreateTable(char *lower, char *real)
+{
+  if(!strcmp(currentDatabase,"(none)")) return 3;
+
+  char tableName[PathMax] = {0};
+  char copyLower[PathMax] ={0};
+  strcpy(copyLower,lower);
+
+  char copyReal[PathMax] ={0};
+  strcpy(copyReal,real);
+
+  int index = 0;
+
+  const char *p=" ";
+  char *a,*b;
+  for( a=strtok_r(copyLower,p,&b) ; a!=NULL ; a=strtok_r(NULL,p,&b) )
+  {
+    int indexC = 0;
+    strcpy(copyReal,real);
+    char  *c, *d;
+    for(c=strtok_r(copyReal,p,&d); c!=NULL ; c=strtok_r(NULL,p,&d))
+    {
+      if(indexC == index) break;
+      indexC++;
+    }
+
+    if(index == 2) 
+    {
+      strcpy(tableName,c);
+      break;
+    }
+
+    index++;
+  }
+
+  char tablePath[PathMax] = {0};
+  sprintf(tablePath,"%s/%s/%s",databasesPath,currentDatabase,tableName);
+
+  char *openParen = strchr(lower,'(');
+  char *closeParen = strchr(openParen,')');
+  if(openParen == NULL || closeParen == NULL) return 0;
+
+  if(access(tablePath,F_OK) != -1) return 2;
+  else{
+    FILE *f = fopen(tablePath,"a");
+    fclose(f);
+    return 1;
+  }
 }
