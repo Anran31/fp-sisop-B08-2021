@@ -43,6 +43,7 @@ int tryUse(char *lower,char *real);
 int checkUserPermission(char *realDBName);
 void makeLog(char *fullCommand);
 int tryCreateTable(char *lower, char *real);
+int tryDropTable(char *lower, char *real);
 void *connection_handler(void *socket_desc);
 
 int main() {
@@ -338,6 +339,13 @@ char* mainQuery(char *fullCommand)
             StatVal = tryCreateTable(lowerFullCommand,copyFullCommand);
             if(StatVal == 1) strcpy(retMessage,"Table Created");
             else if(StatVal == 2) strcpy(retMessage,"Table Already Exist");
+            else if(StatVal == 3) strcpy(retMessage,"Must Use A Database First");
+        }
+        else if(!strncmp(lowerFullCommand,"drop table ",11))
+        {
+            StatVal = tryDropTable(lowerFullCommand,copyFullCommand);
+            if(StatVal == 1) strcpy(retMessage,"Table Dropped");
+            else if(StatVal == 2) strcpy(retMessage,"Table Didn't Exist");
             else if(StatVal == 3) strcpy(retMessage,"Must Use A Database First");
         }
         else if(!strncmp(lowerFullCommand,"exit",4))
@@ -749,4 +757,53 @@ int tryCreateTable(char *lower, char *real)
     fclose(f);
     return 1;
   }
+}
+
+int tryDropTable(char *lower, char *real)
+{
+  if(!strcmp(currentDatabase,"(none)")) return 3;
+
+  char tableName[PathMax] = {0};
+  char copyLower[PathMax] ={0};
+  strcpy(copyLower,lower);
+
+  char copyReal[PathMax] ={0};
+  strcpy(copyReal,real);
+
+  int index = 0;
+
+  const char *p=" ";
+  char *a,*b;
+  for( a=strtok_r(copyLower,p,&b) ; a!=NULL ; a=strtok_r(NULL,p,&b) )
+  {
+    int indexC = 0;
+    strcpy(copyReal,real);
+    char  *c, *d;
+    for(c=strtok_r(copyReal,p,&d); c!=NULL ; c=strtok_r(NULL,p,&d))
+    {
+      if(indexC == index) break;
+      indexC++;
+    }
+
+    if(index == 2) 
+    {
+      strcpy(tableName,c);
+    }
+
+    if(index == 3 && strcmp(c,";") != 0) return 0;
+    index++;
+  }
+
+  char realTableName[PathMax] = {0};
+  if(tableName[strlen(tableName)-1] == ';') strncpy(realTableName,tableName,strlen(tableName)-1);
+  else strcpy(realTableName,tableName);
+
+  char tablePath[PathMax] = {0};
+  sprintf(tablePath,"%s/%s/%s",databasesPath,currentDatabase,realTableName);
+
+  if(access(tablePath,F_OK) == -1) return 2;
+  else {
+    unlink(tablePath);
+    return 1;
+  } 
 }
